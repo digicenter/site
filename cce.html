@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conversor CCe → PDF (modelo idêntico, 1 página)</title>
+  <style>
+    :root{--ink:#111827;--muted:#6b7280;--line:#111;--bg:#fff;--brand:#111}
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;font-family:"Times New Roman", Georgia, serif;color:#000;background:#f5f5f5}
+    @page{ size:A4; margin:0 }
+
+    .container{max-width:980px;margin:24px auto;padding:16px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px}
+    .header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #e5e7eb}
+    .header h1{font:600 18px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .badge{font-size:12px;color:#fff;background:#111;padding:4px 8px;border-radius:999px}
+    .group{border:1px dashed #e5e7eb;border-radius:12px;padding:14px;background:#ffffff;margin:18px}
+    .row{display:grid;grid-template-columns:220px 1fr;gap:10px;margin:6px 0}
+    .row label{font-size:12px;color:#374151}
+    input[type=file]{padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;font-size:14px}
+    button{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer}
+    button.secondary{background:#fff;color:#111}
+
+    /* ===== Página A4 ===== */
+    .preview-frame{background:#fff;border:1px solid #d1d5db;border-radius:12px;margin:18px;padding:8px}
+    .A4{width:210mm;height:297mm;margin:0 auto;background:#fff;color:#000;position:relative;overflow:hidden}
+    .sheet{padding:10mm 8mm 12mm 8mm; transform-origin: top left;} /* escalada via JS */
+
+    .line{border-top:1px solid #000}
+    .topbar{display:grid;grid-template-columns:1fr 1fr;align-items:center}
+    .top-left{font:400 8.5pt/1.1 "Times New Roman", serif; text-transform:uppercase; letter-spacing:.5px}
+    .title{font:700 13.5pt/1.1 "Times New Roman", serif; text-align:center}
+    .subtitle{font:italic 9.5pt/1.1 "Times New Roman", serif; text-align:center;margin-top:2px}
+
+    .kv{display:grid;grid-template-columns:170px 1fr; gap:4px; font:400 9pt/1.25 "Times New Roman", serif}
+    .kv b{font-weight:700}
+    .block{border:1px solid #000; padding:6px; margin-top:8px}
+    .note{font:400 9pt/1.35 "Times New Roman", serif; text-align:justify; overflow-wrap:anywhere; word-break:break-word}
+
+    .nf-and-bar{display:grid; grid-template-columns:1fr 230px; gap:10px; align-items:center; margin-top:8px}
+    .nfline{font:700 10pt/1.2 "Times New Roman", serif}
+    .barcode-wrap{border:1px solid #000; padding:4px}
+    .barcode-wrap svg{display:block; width:100%; height:42px}
+    .barcode-num{font:400 9pt/1.2 "Times New Roman", serif; text-align:center; margin-top:2px}
+
+    .sec-title{font:700 10pt/1.2 "Times New Roman", serif; text-transform:uppercase; border-top:1px solid #000; border-bottom:1px solid #000; padding:4px 0; margin:10px 0 6px}
+    .corr{font:700 10pt/1.45 "Times New Roman", serif; text-align:justify; overflow-wrap:anywhere; word-break:break-word}
+
+    /* ===== Rodapé fixo no fim da página ===== */
+    .footer{position:absolute; left:8mm; right:8mm; bottom:8mm;}
+    .footer .center{text-align:center; font:400 9pt/1.3 "Times New Roman", serif}
+    .footer .bottom{display:flex; justify-content:space-between; margin-top:6px; font:italic 8.5pt/1 "Times New Roman", serif}
+    .footer .bottom span{white-space:nowrap}
+
+    @media print{
+      body{background:#fff}
+      .card,.group{display:none}
+      .preview-frame{margin:0;border:none;padding:0}
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <h1>Conversor de Carta de Correção Eletrônica (CC-e) → PDF</h1>
+        <span class="badge">Upload XML → Baixa PDF</span>
+      </div>
+
+      <div class="group">
+        <div class="row">
+          <label for="xmlFile">XML da CC-e (procEventoNFe)</label>
+          <input id="xmlFile" type="file" accept=".xml" />
+        </div>
+        <div style="display:flex; gap:10px; margin-top:8px">
+          <button id="btnExemplo" class="secondary" type="button">Usar XML de exemplo</button>
+          <button id="btnBaixar" type="button" disabled>Baixar PDF</button>
+          <span id="warn" style="color:#b91c1c; display:none">Não foi possível ler este XML. É o XML de evento CC-e?</span>
+        </div>
+      </div>
+
+      <div class="preview-frame">
+        <div id="a4" class="A4">
+          <!-- CONTEÚDO ESCALÁVEL -->
+          <div id="sheet" class="sheet">
+            <div class="topbar">
+              <div class="top-left">IDENTIFICAÇÃO DO EMITENTE</div>
+              <div></div>
+            </div>
+            <div class="line" style="margin:2px 0 6px"></div>
+            <div class="title">Representação Gráfica de CC-e</div>
+            <div class="subtitle">(Carta de Correção Eletrônica)</div>
+
+            <div class="block">
+              <div class="kv"><div><b>ID do Evento:</b></div><div id="v_id"></div></div>
+              <div class="kv"><div><b>Criado em:</b></div><div id="v_dhEvt"></div></div>
+              <div class="kv"><div><b>Protocolo:</b></div><div id="v_prot"></div></div>
+            </div>
+
+            <div class="block note">
+              De acordo com as determinações legais vigentes, vimos por meio desta comunicar-lhe que a Nota Fiscal, abaixo referenciada, contém irregularidades que estão destacadas e suas respectivas correções, solicitamos que sejam aplicadas essas correções ao executar seus lançamentos fiscais.
+            </div>
+
+            <div class="nf-and-bar">
+              <div class="nfline">Nota Fiscal: <span id="v_nnf">000.000.000</span> · Série: <span id="v_serie">000</span></div>
+              <div class="barcode-wrap">
+                <svg id="barcode" aria-label="chave"></svg>
+                <div class="barcode-num" id="v_chave"></div>
+              </div>
+            </div>
+
+            <div class="block">
+              <div class="note" id="v_xCondUso">—</div>
+            </div>
+
+            <div class="sec-title">CORREÇÕES A SEREM CONSIDERADAS</div>
+            <div class="corr" id="v_xCorrecao">—</div>
+          </div>
+
+          <!-- RODAPÉ FIXO NO FUNDO -->
+          <div id="footer" class="footer">
+            <div class="center">
+              Este documento é uma representação gráfica da CC-e e foi impresso apenas para sua informação e não possui validade fiscal.<br/>
+              A CC-e deve ser recebida e mantida em arquivo eletrônico XML e pode ser consultada através dos Portais das SEFAZ.
+            </div>
+            <div class="bottom">
+              <span id="v_metaLeft">Impresso em —</span>
+              <span id="v_metaRight">Documento gerado automaticamente</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  const NS = 'http://www.portalfiscal.inf.br/nfe';
+
+  function $t(el, path){
+    if(!el) return '';
+    const parts = path.split('/');
+    let cur = el;
+    for(const p of parts){
+      const list = cur.getElementsByTagNameNS(NS, p);
+      if(!list || !list[0]) return '';
+      cur = list[0];
+    }
+    return (cur.textContent||'').trim();
+  }
+
+  function keyGroups(k){ return (k||'').replace(/\D/g,'').replace(/(.{4})/g,'$1 ').trim(); }
+  function fromChave(ch){
+    const d = (ch||'').replace(/\D/g,'');
+    if(d.length!==44) return {serie:'000', nnf:'000000000'};
+    return {serie:d.substring(22,25), nnf:d.substring(25,34)};
+  }
+  function fmtNNF(n){ const s=(n||'').padStart(9,'0'); return `${s.substring(0,3)}.${s.substring(3,6)}.${s.substring(6,9)}`; }
+
+  // 96dpi ≈ px/mm
+  const PX_PER_MM = 96/25.4;
+  function mmToPx(mm){ return mm*PX_PER_MM; }
+
+  // Ajusta escala do conteúdo para caber acima do rodapé
+  function fitToOnePage(){
+    const a4 = document.getElementById('a4');
+    const sheet = document.getElementById('sheet');
+    const footer = document.getElementById('footer');
+
+    // reset
+    sheet.style.transform = 'scale(1)';
+
+    const availH = a4.clientHeight - footer.offsetHeight - mmToPx(3); // 3mm de respiro
+    const actualH = sheet.getBoundingClientRect().height;
+
+    if(actualH > availH){
+      const scale = Math.max(0.6, Math.min(1, availH / actualH));
+      sheet.style.transform = `scale(${scale})`;
+    }
+  }
+
+  function fill(parsed){
+    document.getElementById('v_id').textContent = parsed.idEvento || '';
+    document.getElementById('v_dhEvt').textContent = parsed.dhEvento || '';
+    const prot = parsed.nProt ? `${parsed.nProt} · Registrado em: ${parsed.dhRegEvento||''}` : '';
+    document.getElementById('v_prot').textContent = prot;
+
+    const ch = (parsed.chNFe||'').replace(/\D/g,'');
+    const {serie, nnf} = parsed.serie && parsed.nNF ? {serie:parsed.serie, nnf:parsed.nNF} : fromChave(ch);
+    document.getElementById('v_serie').textContent = (serie||'000').padStart(3,'0');
+    document.getElementById('v_nnf').textContent = fmtNNF(nnf||'000000000');
+
+    document.getElementById('v_xCondUso').textContent = parsed.xCondUso||'—';
+    document.getElementById('v_xCorrecao').textContent = parsed.xCorrecao||'—';
+
+    const chaveFmt = keyGroups(ch);
+    document.getElementById('v_chave').textContent = chaveFmt;
+    try{ JsBarcode('#barcode', ch || '00000000000000000000000000000000000000000000', {format:'CODE128', width:1.2, height:42, displayValue:false, margin:0}); }catch(e){}
+
+    // atualiza “Impresso em …”
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2,'0');
+    const mm = String(now.getMonth()+1).padStart(2,'0');
+    const yyyy = now.getFullYear();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mi = String(now.getMinutes()).padStart(2,'0');
+    const ss = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('v_metaLeft').textContent = `Impresso em ${dd}/${mm}/${yyyy} ${hh}:${mi}:${ss}`;
+
+    // ajusta para caber considerando o rodapé fixo
+    fitToOnePage();
+  }
+
+  function parseCCe(xml){
+    const dom = new DOMParser().parseFromString(xml, 'text/xml');
+    const evento = dom.getElementsByTagNameNS(NS,'evento')[0];
+    const ret = dom.getElementsByTagNameNS(NS,'retEvento')[0];
+    if(!evento) throw new Error('XML não contém <evento>');
+    const inf = evento.getElementsByTagNameNS(NS,'infEvento')[0];
+    const det = evento.getElementsByTagNameNS(NS,'detEvento')[0];
+
+    return {
+      idEvento: inf?.getAttribute('Id') || '',
+      chNFe: $t(inf,'chNFe'),
+      dhEvento: $t(inf,'dhEvento'),
+      nSeqEvento: $t(inf,'nSeqEvento'),
+      xCorrecao: $t(det,'xCorrecao'),
+      xCondUso: $t(det,'xCondUso'),
+      nProt: $t(ret,'infEvento/nProt'),
+      xMotivo: $t(ret,'infEvento/xMotivo'),
+      dhRegEvento: $t(ret,'infEvento/dhRegEvento'),
+      serie: $t(dom,'infNFe/ide/serie'),
+      nNF: $t(dom,'infNFe/ide/nNF')
+    };
+  }
+
+  async function generatePDF(){
+    fitToOnePage(); // garante ajuste antes do PDF
+    const elem = document.getElementById('a4');
+    const opt = {
+      margin: 0,
+      filename: window.__pdfName||'CCe.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+      pagebreak: { mode: ['avoid-all'] }
+    };
+    await html2pdf().set(opt).from(elem).save();
+  }
+
+  async function handleFile(file){
+    document.getElementById('warn').style.display='none';
+    try{
+      const txt = await file.text();
+      const parsed = parseCCe(txt);
+      fill(parsed);
+      const ch = (parsed.chNFe||'').replace(/\D/g,'');
+      window.__pdfName = `CCe_${ch}${parsed.nSeqEvento? '_seq'+parsed.nSeqEvento:''}.pdf`;
+      document.getElementById('btnBaixar').disabled=false;
+    }catch(err){
+      console.error(err);
+      document.getElementById('warn').style.display='inline';
+      document.getElementById('btnBaixar').disabled=true;
+    }
+  }
+
+  document.getElementById('xmlFile').addEventListener('change', e=>{
+    const f = e.target.files?.[0]; if(f) handleFile(f);
+  });
+  document.getElementById('btnBaixar').addEventListener('click', generatePDF);
+  window.addEventListener('resize', fitToOnePage);
+
+  // Exemplo
+  const EXAMPLE_XML = `<?xml version="1.0" encoding="utf-8"?>
+<procEventoNFe versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
+    <infEvento Id="ID1101102625100001246714647255920000000001102060401802">
+      <cOrgao>26</cOrgao>
+      <tpAmb>1</tpAmb>
+      <CPF>12467146472</CPF>
+      <chNFe>26251000012467146472559200000000011020604018</chNFe>
+      <dhEvento>2025-10-27T19:02:07-03:00</dhEvento>
+      <tpEvento>110110</tpEvento>
+      <nSeqEvento>2</nSeqEvento>
+      <verEvento>1.00</verEvento>
+      <detEvento versao="1.00">
+        <descEvento>Carta de Correcao</descEvento>
+        <xCorrecao>Correção no campo "Informações Complementares": inclusão dos dados para pagamento. Banco do Brasil - Agência: 1120-7 - Conta Poupança: 5644-8 - Variação: 51 - Favorecido: Armando Belo da Silva. Essa correção não altera valores, impostos, destinatário ou data da operação.</xCorrecao>
+        <xCondUso>A Carta de Correcao e disciplinada pelo paragrafo 1o-A do art. 7o do Convenio S/N, de 15 de dezembro de 1970 e pode ser utilizada para regularizacao de erro ocorrido na emissao de documento fiscal, desde que o erro nao esteja relacionado com: I - as variaveis que determinam o valor do imposto tais como: base de calculo, aliquota, diferenca de preco, quantidade, valor da operacao ou da prestacao; II - a correcao de dados cadastrais que implique mudanca do remetente ou do destinatario; III - a data de emissao ou de saida.</xCondUso>
+      </detEvento>
+    </infEvento>
+  </evento>
+  <retEvento versao="1.00">
+    <infEvento>
+      <tpAmb>1</tpAmb>
+      <verAplic>NFEPE_P_4.1.1</verAplic>
+      <cOrgao>26</cOrgao>
+      <cStat>135</cStat>
+      <xMotivo>Evento registrado e vinculado a NF-e</xMotivo>
+      <chNFe>26251000012467146472559200000000011020604018</chNFe>
+      <tpEvento>110110</tpEvento>
+      <nSeqEvento>2</nSeqEvento>
+      <dhRegEvento>2025-10-27T19:04:51-03:00</dhRegEvento>
+      <nProt>126250114239965</nProt>
+    </infEvento>
+  </retEvento>
+</procEventoNFe>`;
+
+  document.getElementById('btnExemplo').addEventListener('click', ()=>{
+    const parsed = parseCCe(EXAMPLE_XML);
+    fill(parsed);
+    const ch = (parsed.chNFe||'').replace(/\D/g,'');
+    window.__pdfName = `CCe_${ch}${parsed.nSeqEvento? '_seq'+parsed.nSeqEvento:''}.pdf`;
+    document.getElementById('btnBaixar').disabled=false;
+  });
+
+  // inicial
+  fitToOnePage();
+</script>
+</body>
+</html>
